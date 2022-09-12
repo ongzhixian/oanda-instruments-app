@@ -2,7 +2,7 @@ import argparse
 import json
 from os import path, makedirs
 
-# import pika
+import pika
 
 from logger import Logger
 
@@ -48,8 +48,8 @@ def get_amqp_url_parameters(config_file_path):
 
     log.info("Cloud AMQP URL read", source="program", event="set", target="cloud amqp url")
     
-    # return pika.URLParameters(cloud_amqp_url)
-    return None
+    return pika.URLParameters(cloud_amqp_url)
+
 
 def get_database_settings(config_file_path):
     

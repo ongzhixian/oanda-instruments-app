@@ -8,7 +8,7 @@ from urllib.parse import quote
 from urllib.request import urlopen as url_open
 from urllib.request import Request as url_request
 
-# import pika
+import pika
 
 from logger import Logger
 from program_arguments import get_settings_from_arguments
@@ -24,12 +24,12 @@ from data_providers import MySqlDataProvider
 
 # 
 # financial_instrument
-# └───fetch.yahoo-finance.price
-#     └───fetch_yahoo_finance_price
+# └───fetch.oanda.price
+#     └───fetch_oanda_price
 
 EXCHANGE_NAME = 'financial_instrument'
-ROUTING_KEY = "yafi.fetch"
-QUEUE_NAME = 'yafi_fetch'
+ROUTING_KEY = "fetch.oanda.price"
+QUEUE_NAME = 'fetch_oanda_price'
 
 
 def setup_logging():
@@ -52,7 +52,46 @@ LIMIT 1;
 """
     data_rows = [(market_identifier_id, x['name'], x['displayName'], x['name'], market_identifier_id, x['name']) for x in instruments]
     (rows_affected, errors) = mysql.execute_batch(sql, data_rows)
-    log.info("Rows affected {rows_affected}")
+    log.info(f"Rows affected {rows_affected}")
+
+
+def get_instrument_code_list(sgx_isin_data_rows):
+    return [ 'XCU_USD', 'EUR_USD', 'USD_JPY' ]
+    
+
+def setup_rabbit_mq(channel):
+    channel.exchange_declare(
+        exchange=EXCHANGE_NAME, 
+        exchange_type='topic')
+        
+    channel.queue_declare(
+        queue=QUEUE_NAME, 
+        durable=True)
+    
+    channel.queue_bind(
+        exchange=EXCHANGE_NAME, 
+        routing_key=ROUTING_KEY,
+        queue=QUEUE_NAME)
+
+
+def publish_tickers(url_parameters, ticker_list):
+
+    with pika.BlockingConnection(url_parameters) as connection, connection.channel() as channel:
+
+        setup_rabbit_mq(channel)
+
+        for ticker in ticker_list:
+
+            channel.basic_publish(
+                exchange=EXCHANGE_NAME, 
+                routing_key=ROUTING_KEY, 
+                body=ticker,
+                properties=pika.BasicProperties(
+                    delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE
+                ))
+
+            log.info(f"Publish {ticker}", event="publish", type="ticker", target=ticker)
+        
 
 if __name__ == "__main__":
     log = setup_logging()
@@ -61,5 +100,8 @@ if __name__ == "__main__":
     trading_instruments = oanda_api.get_account_instruments()
     
     store_account_instruments_to_database(trading_instruments)
+
+    instrument_code_list = get_instrument_code_list(trading_instruments)
+    publish_tickers(url_parameters, instrument_code_list)
 
     log.info("Program complete", source="program", event="complete")
