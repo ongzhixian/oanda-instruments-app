@@ -2,7 +2,7 @@ import argparse
 import json
 from os import path, makedirs
 
-import pika
+# import pika
 
 from logger import Logger
 
@@ -48,7 +48,8 @@ def get_amqp_url_parameters(config_file_path):
 
     log.info("Cloud AMQP URL read", source="program", event="set", target="cloud amqp url")
     
-    return pika.URLParameters(cloud_amqp_url)
+    # return pika.URLParameters(cloud_amqp_url)
+    return None
 
 def get_database_settings(config_file_path):
     
@@ -77,18 +78,17 @@ def get_oanda_settings(config_file_path):
     except Exception as e:
         log.error(e)
         exit(3)
-    
-    if 'accounts' not in json_data \
-        or 'practice2' not in json_data['accounts'] \
-        or'url' not in json_data['cloud_amqp']['armadillo']:
-        log.error("Config file does not have structure [ cloud_amqp > armadillo > url ]")
-        exit(4)
-    
-    cloud_amqp_url = json_data['cloud_amqp']['armadillo']['url']
 
-    log.info("Cloud AMQP URL read", source="program", event="set", target="cloud amqp url")
+    expected_keys = [ 'account_number', 'api_key', 'rest_api_url', 'streaming_api_url' ]
+    has_unexpected_key = False in [ json_data_key in expected_keys for json_data_key in json_data.keys() ]
     
-    return pika.URLParameters(cloud_amqp_url)
+    if has_unexpected_key:
+        log.error(f"Config file does not proper structure; should have {expected_keys}")
+        exit(4)
+
+    log.info("Oanda settings read", source="program", event="set", target="oanda settings")
+    
+    return json_data
 
 def get_save_file_full_path(directory_path):
 
